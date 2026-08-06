@@ -1,0 +1,105 @@
+# ==============================================================================
+# CẤU HÌNH BÁO CÁO THUẾ GTGT - CÔNG TY ĐIỆN LỰC VŨNG TÀU
+# ==============================================================================
+# Cấu trúc thư mục ĐẦU VÀO:
+#   ĐẦU VÀO/
+#   ├── 2026-01/   ← file tháng 01
+#   ├── 2026-02/   ← file tháng 02
+#   ├── ...
+#   └── 2026-12/   ← file tháng 12
+# Hàng tháng anh chỉ cần tạo folder mới và chép 9 file vào.
+# Trên giao diện web sẽ có nút chọn tháng.
+
+# Năm tài chính
+fiscal_year: 2026
+
+# Tháng báo cáo mặc định khi mở app (format: YYYY-MM)
+report_month: "2026-05"
+
+# Tên công ty
+company_name: "CHI NHÁNH TỔNG CÔNG TY ĐIỆN LỰC THÀNH PHỐ HỒ CHÍ MINH TNHH - CÔNG TY ĐIỆN LỰC VŨNG TÀU"
+company_short: "ĐLVT"
+
+# Tên các file đầu vào (nằm trong thư mục ĐẦU VÀO/)
+input_files:
+  ta035: "TA_035_TK3331.xlsx"
+  ta030_3331: "TA_030_TK3331.xlsx"
+  ta030_1331: "TA_030_TK1331.xlsx"
+  ta036: "TA_036_TK1331.xlsx"
+  gl038: "GL_038_TK33895.xlsx"
+  gl0903: "GL_0903_TK511.xlsx"
+  bchdon: "BC_HDon_01_THopTheoNgayGCS {MM-YYYY}.xlsx"
+  nhomtc: "BC_San luong nhom Toan Cau {MM-YYYY}.xlsx"
+  kd4a: "rptKDDN4A.xls"
+
+# File đầu ra
+output_file: "BAO_CAO_THUE_GTGT_{report_month}.xlsx"
+
+# ==============================================================================
+# QUY TẮC PHÂN LOẠI (dựa trên diễn giải/nội dung)
+# ==============================================================================
+# Mỗi keyword sẽ được tìm kiếm trong chuỗi diễn giải (không phân biệt hoa/thường)
+# Thứ tự ưu tiên: kiểm tra từ trên xuống, match đầu tiên sẽ được chọn
+
+classification_rules:
+  - code: "DIEN00"
+    keywords: ["DIEN00", "ĐIỆN PHÁT SINH-CT TNHH NHÔM TOÀN CẦU"]
+    description: "Tiền điện không tính thuế (Nhôm Toàn Cầu)"
+
+  - code: "DIEN01"
+    keywords: ["DIEN01"]
+    description: "Tiền Điện có tính thuế"
+
+  - code: "CSPK00"
+    keywords: ["CSPK00"]
+    description: "Điện vô công không tính thuế"
+
+  - code: "CSPK02"
+    keywords: ["CSPK02"]
+    description: "Điện vô công có tính thuế"
+
+  - code: "1388DD"
+    keywords: ["1388", "ĐIỀU ĐỘNG", "VTĐĐ", "VẬT TƯ ĐIỀU ĐỘNG"]
+    description: "Điều động VTTB"
+
+  - code: "4500TT"
+    keywords: ["4500TT", "cho thuê cột điện", "cho thuê trụ"]
+    description: "Cho thuê trụ điện"
+
+  - code: "5118QT"
+    keywords: ["5118QT", "quà tặng"]
+    description: "Quà tặng"
+
+# Mã mặc định khi không match được rule nào
+default_classification: "CHUARO"
+
+# ==============================================================================
+# QUY TẮC KIỂM DÒ MST
+# ==============================================================================
+mst_rules:
+  valid_length: 10
+  # Các MST đặc biệt (có dấu '-') vẫn OK nếu phần trước '-' = 10 ký tự
+  allow_branch_suffix: true  # cho phép dạng 0300951119-010
+
+# ==============================================================================
+# QUY TẮC PHÂN TÁCH TÀI KHOẢN CHO TA036
+# ==============================================================================
+# Cột "Loại hình SXKD" chứa giá trị dùng để phân tách TK
+ta036_account_rules:
+  xdcb_keyword: "ĐẦU TƯ XÂY DỰNG"
+  xdcb_account: "TK13313"
+  default_account: "TK13311"
+
+# ==============================================================================
+# SỐ DƯ CỐ ĐỊNH (Thuế không được khấu trừ)
+# ==============================================================================
+# TK13311: Số dư SPC (thuế không được khấu trừ, giữ nguyên tất cả các tháng)
+tk13311_du_spc: 60549888887
+
+# ==============================================================================
+# CÀI ĐẶT ỨNG DỤNG
+# ==============================================================================
+app:
+  host: "127.0.0.1"
+  port: 5000
+  debug: true
