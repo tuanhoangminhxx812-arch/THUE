@@ -32,6 +32,10 @@ from processors.bangke01 import process_bangke01
 from processors.tokhai01 import process_tokhai01
 from report_builder import build_report
 from st_theme import apply_theme
+from tax_vta_manager import (
+    ensure_tax_vta_file, update_tax_vta_file,
+    get_tax_vta_summary_data, get_month_tax_vta_file
+)
 
 # ============================================================
 # PAGE CONFIG
@@ -331,124 +335,95 @@ def render_sidebar():
                 selected_month = quarter_months[0] if quarter_months else "2026-01"
                 st.warning(f"Chưa có dữ liệu cho Quý {quarter}")
 
-        st.divider()
-
-        # Nút chạy
+        # Nút chạy & cập nhật + xuất Excel trực tiếp 1-click
         col1, col2 = st.columns(2)
         with col1:
-            btn_process = st.button("⚙️ Chạy Báo Cáo", type="primary", use_container_width=True)
+            btn_process = st.button("🔄 Cập Nhật Dữ Liệu", type="primary", use_container_width=True)
         with col2:
-            btn_export = st.button("📥 Xuất Excel", use_container_width=True,
-                                   disabled=(st.session_state.results is None))
-
-        # Upload override
-        st.divider()
-        with st.expander("📎 Upload file override (tùy chọn)", expanded=False):
-            st.caption("Upload file để ghi đè thay vì đọc từ thư mục ĐẦU VÀO/")
-            up_ta035 = st.file_uploader("TA_035 (Bán ra)", type=["xlsx", "xls"], key="up_ta035")
-            up_ta036 = st.file_uploader("TA_036 (Mua vào)", type=["xlsx", "xls"], key="up_ta036")
-            up_ta030_3331 = st.file_uploader("TA_030_TK3331", type=["xlsx", "xls"], key="up_ta030_3331")
-            up_ta030_1331 = st.file_uploader("TA_030_TK1331", type=["xlsx", "xls"], key="up_ta030_1331")
+            master_file = get_month_tax_vta_file(selected_month)
+            if master_file.exists():
+                with open(master_file, "rb") as f:
+                    excel_bytes = f.read()
+                st.download_button(
+                    label="📥 Xuất Excel",
+                    data=excel_bytes,
+                    file_name=master_file.name,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                    key=f"btn_export_dl_{selected_month}"
+                )
+            else:
+                st.button("📥 Xuất Excel", disabled=True, use_container_width=True)
 
         # Trạng thái
         if st.session_state.processed_month:
-            st.success(f"✓ Đã xử lý: {st.session_state.processed_month}")
+            st.success(f"✓ Đã nạp: {st.session_state.processed_month}")
 
-        return selected_month, btn_process, btn_export
+        return selected_month, btn_process
 
 
 # ============================================================
 # TAB 1: TỔNG HỢP ĐỐI CHIẾU
 # ============================================================
-def render_tab_tonghop(taxvta, results):
-    """Tab tổng hợp đối chiếu chính."""
-    st.markdown("### 📊 Bảng Tổng Hợp Đối Chiếu Thuế GTGT")
+def render_tab_tonghop(summary_data, taxvta=None):
+    """Tab tổng hợp đối chiếu từ file Master TAX_VTA."""
+    st.markdown("### 📊 Bảng Tổng Hợp Đối Chiếu Thuế GTGT (Từ File Master TAX_VTA)")
 
-    thue_dr = taxvta.get("thue_dau_ra", {})
-    thue_dv = taxvta.get("thue_dau_vao", {})
-    cross_checks = taxvta.get("cross_checks", [])
-    kiem_do = taxvta.get("kiem_do", {})
-
-    # === METRICS TỔNG QUAN ===
-    ta035 = thue_dr.get("TA035", {})
-    ta036_data = thue_dv.get("TA036", {})
-
-    tong_dau_ra = sum(v.get("thue", 0) for v in ta035.values())
-    tong_dau_vao = sum(v.get("thue", 0) for v in ta036_data.values())
-
-    # Số dư đầu kỳ TK33311 - lấy từ TA030_TK3331
-    ta030_3331 = results.get("ta030_3331", {})
-    du_dau_ky = safe_float(ta030_3331.get("du_dau_ky", {}).get("TK33311", {}).get("no", 0))
-
-    # Công thức: Thuế phải nộp = Đầu kỳ + Đầu vào - Đầu ra
-    thue_phai_nop = du_dau_ky + tong_dau_vao - tong_dau_ra
-
-    col1, col2, col3, col4 = st.columns(4)
+    cards = summary_data.get("summary_cards", {})
+    col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("🔵 Dư Đầu Kỳ (TK33311)", fmt(du_dau_ky))
+        st.metric("🔴 Thuế Đầu Ra (TA35)", fmt(cards.get("thue_dau_ra")))
     with col2:
-        st.metric("🔴 Thuế Đầu Ra (TK33311)", fmt(tong_dau_ra))
+        st.metric("🟢 Thuế Đầu Vào (TK1331)", fmt(cards.get("thue_dau_vao")))
     with col3:
-        st.metric("🟢 Thuế Đầu Vào (TK1331)", fmt(tong_dau_vao))
-    with col4:
-        st.metric("📌 Thuế Phải Nộp", fmt(thue_phai_nop))
+        st.metric("📌 Thuế Phải Nộp", fmt(cards.get("thue_phai_nop")))
 
     st.divider()
 
-    # === PHẦN 1: THUẾ ĐẦU RA ===
-    st.markdown("#### 🔴 Phần 1: Thuế GTGT Đầu Ra (TK 33311)")
-
-    # Thuế đầu ra theo thuế suất (từ TA035)
-    ta035_res = results.get("ta035", {})
-    ta035_summary = ta035_res.get("summary", pd.DataFrame())
-
-    if not ta035_summary.empty:
-        st.dataframe(
-            format_df(ta035_summary),
-            use_container_width=True,
-            hide_index=True
-        )
-
-    # Đối chiếu TK33311 với GL_038
-    gl038 = results.get("gl038", {})
-    ta030_3331 = results.get("ta030_3331", {})
-
-    if ta030_3331:
-        ta030_detail = ta030_3331.get("summary", pd.DataFrame())
-        if not ta030_detail.empty:
-            st.caption("📒 Đối chiếu Sổ cái TK33311 (TA030_TK3331):")
-            st.dataframe(format_df(ta030_detail), use_container_width=True, hide_index=True)
+    # Phần 1: Bán Ra TA35
+    st.markdown("#### 🔴 Phần 1: Thuế GTGT Đầu Ra (Phân Loại Bán Ra TA35)")
+    ta35_items = summary_data.get("ban_ra", {}).get("ta35_items", [])
+    if ta35_items:
+        df_ta35 = pd.DataFrame(ta35_items)
+        df_ta35.columns = ["Mã Phân Loại", "Doanh Số Chưa Thuế", "Thuế GTGT"]
+        df_ta35["Doanh Số Chưa Thuế"] = df_ta35["Doanh Số Chưa Thuế"].apply(fmt)
+        df_ta35["Thuế GTGT"] = df_ta35["Thuế GTGT"].apply(fmt)
+        
+        total_ds = summary_data.get("ban_ra", {}).get("ta35_total", {}).get("doanh_so", 0)
+        total_thue = summary_data.get("ban_ra", {}).get("ta35_total", {}).get("thue", 0)
+        df_total = pd.DataFrame([{"Mã Phân Loại": "CỘNG", "Doanh Số Chưa Thuế": fmt(total_ds), "Thuế GTGT": fmt(total_thue)}])
+        df_display = pd.concat([df_ta35, df_total], ignore_index=True)
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
 
     st.divider()
 
-    # === PHẦN 2: THUẾ ĐẦU VÀO ===
-    st.markdown("#### 🟢 Phần 2: Thuế GTGT Đầu Vào (TK 1331)")
+    # Phần 2: Mua Vào TA36 / 13311
+    st.markdown("#### 🟢 Phần 2: Thuế GTGT Đầu Vào (TK 13311 & TK 13313)")
+    mv = summary_data.get("mua_vao", {})
+    mv_rows = [
+        {"Tài Khoản": "TK 13311 (Hàng hóa, dịch vụ SXKD)", "Doanh Số Chưa Thuế": fmt(mv.get("13311", {}).get("doanh_so")), "Thuế GTGT": fmt(mv.get("13311", {}).get("thue"))},
+        {"Tài Khoản": "TK 13313 (Đầu tư XDCB)", "Doanh Số Chưa Thuế": fmt(mv.get("13313", {}).get("doanh_so")), "Thuế GTGT": fmt(mv.get("13313", {}).get("thue"))},
+        {"Tài Khoản": "CỘNG THUẾ ĐẦU VÀO", "Doanh Số Chưa Thuế": fmt(mv.get("total", {}).get("doanh_so")), "Thuế GTGT": fmt(mv.get("total", {}).get("thue"))},
+    ]
+    st.dataframe(pd.DataFrame(mv_rows), use_container_width=True, hide_index=True)
 
-    ta036_res = results.get("ta036", {})
-    ta036_summary = ta036_res.get("summary", pd.DataFrame())
+    st.divider()
 
-    if not ta036_summary.empty:
-        st.dataframe(
-            format_df(ta036_summary),
-            use_container_width=True,
-            hide_index=True
-        )
-
-    # Thuế đầu vào theo thuế suất
-    ta036_ts = ta036_res.get("summary_thue_suat", pd.DataFrame())
-    if not ta036_ts.empty:
-        st.caption("📊 Theo thuế suất (cho tờ khai):")
-        st.dataframe(
-            format_df(ta036_ts),
-            use_container_width=True,
-            hide_index=True
-        )
+    # Phần 3: Bảng kê GCS Bán ra
+    st.markdown("#### ⚡ Phần 3: Bảng Kê GCS Tiền Điện (Phát Hành Hóa Đơn)")
+    gcs = summary_data.get("ban_ra", {})
+    gcs_rows = [
+        {"Kỳ Phát Hành": "TRONG THÁNG", "Doanh Số Chưa Thuế": fmt(gcs.get("trong_thang", {}).get("doanh_so")), "Thuế GTGT": fmt(gcs.get("trong_thang", {}).get("thue"))},
+        {"Kỳ Phát Hành": "CUỐI THÁNG (Kỳ 3 sang tháng sau)", "Doanh Số Chưa Thuế": fmt(gcs.get("cuoi_thang", {}).get("doanh_so")), "Thuế GTGT": fmt(gcs.get("cuoi_thang", {}).get("thue"))},
+        {"Kỳ Phát Hành": "CỘNG BẢNG KÊ GCS", "Doanh Số Chưa Thuế": fmt(gcs.get("total_gcs", {}).get("doanh_so")), "Thuế GTGT": fmt(gcs.get("total_gcs", {}).get("thue"))},
+    ]
+    st.dataframe(pd.DataFrame(gcs_rows), use_container_width=True, hide_index=True)
 
     st.divider()
 
     # === BẢNG CROSS-CHECK ===
     st.markdown("#### 🔍 Kiểm Tra Chéo Giữa Các Bảng")
-
+    cross_checks = taxvta.get("cross_checks", []) if taxvta else []
     if cross_checks:
         cc_df = pd.DataFrame(cross_checks)
         cc_display = cc_df[["name", "source_a", "value_a", "source_b", "value_b", "chenh_lech", "status"]].copy()
@@ -459,8 +434,10 @@ def render_tab_tonghop(taxvta, results):
             cc_display[col] = cc_display[col].apply(lambda x: fmt(x) if pd.notna(x) else "")
 
         styled = cc_display.style.applymap(highlight_diff, subset=["Chênh lệch"]).applymap(highlight_ok, subset=["Trạng thái"])
-
         st.dataframe(styled, use_container_width=True, hide_index=True)
+
+
+
 
 
 # ============================================================
@@ -1129,90 +1106,51 @@ def _export_tokhai01_excel(tokhai01, config):
 # MAIN APP
 # ============================================================
 def main():
-    selected_month, btn_process, btn_export = render_sidebar()
+    selected_month, btn_process = render_sidebar()
 
-    # === XỬ LÝ KHI NHẤN "CHẠY BÁO CÁO" ===
+    # === XỬ LÝ KHI NHẤN "CẬP NHẬT DỮ LIỆU" ===
     if btn_process:
+        try:
+            with st.spinner(f"Đang chép dữ liệu từ các file nguồn vào file Master TAX_VTA tháng {selected_month}..."):
+                updated_file = update_tax_vta_file(selected_month)
+                st.session_state.processed_month = selected_month
+                st.toast(f"✅ Đã nạp và lưu đè file gốc {os.path.basename(updated_file)} thành công!", icon="✅")
+                st.rerun()
+        except Exception as e:
+            st.error(f"❌ Lỗi cập nhật dữ liệu: {str(e)}")
+            with st.expander("Chi tiết lỗi"):
+                st.code(traceback.format_exc())
+
+    # === ĐỌC DỮ LIỆU MASTER VÀ CHI TIẾT CÁC TAB ===
+    summary_data = get_tax_vta_summary_data(selected_month)
+
+    if st.session_state.results is None or st.session_state.processed_month != selected_month:
         try:
             config = load_config()
             config["report_month"] = selected_month
             resolve_config_filenames(config)
             st.session_state.config = config
 
-            # Kiểm tra thư mục tháng có tồn tại không
-            from utils import get_input_dir
-            input_dir = get_input_dir(config)
-            if not os.path.exists(input_dir):
-                st.error(f"❌ Thư mục chưa tồn tại: `{input_dir}`")
-                st.warning(f"Anh cần tạo thư mục `ĐẦU VÀO/{selected_month}/` và chép 9 file Excel vào trước khi chạy báo cáo.")
-                st.stop()
-            
-            files_in_dir = [f for f in os.listdir(input_dir) if f.endswith(('.xlsx', '.xls'))]
-            if len(files_in_dir) == 0:
-                st.error(f"❌ Thư mục `{input_dir}` chưa có file Excel nào.")
-                st.warning("Anh cần chép file dữ liệu vào thư mục tháng trước khi chạy.")
-                st.stop()
-
             results, taxvta = run_all_processors(config)
             st.session_state.results = results
             st.session_state.taxvta = taxvta
-            st.session_state.processed_month = selected_month
-
-            # Xử lý Bảng Kê 01 và Tờ Khai 01
             st.session_state.bangke01 = process_bangke01(results, config)
             st.session_state.tokhai01 = process_tokhai01(results, taxvta, config)
+            st.session_state.processed_month = selected_month
+        except Exception:
+            st.session_state.results = {}
+            st.session_state.taxvta = {}
 
-            st.toast("✅ Xử lý hoàn tất!", icon="✅")
-            st.rerun()
+    results = st.session_state.results or {}
+    taxvta = st.session_state.taxvta or {}
 
-        except Exception as e:
-            st.error(f"❌ Lỗi xử lý: {str(e)}")
-            with st.expander("Chi tiết lỗi"):
-                st.code(traceback.format_exc())
-
-    # === XỬ LÝ KHI NHẤN "XUẤT EXCEL" ===
-    if btn_export and st.session_state.results:
-        try:
-            config = st.session_state.config or load_config()
-            filepath = build_report(st.session_state.results, config)
-            with open(filepath, "rb") as f:
-                st.sidebar.download_button(
-                    label="💾 Tải file xuống",
-                    data=f.read(),
-                    file_name=os.path.basename(filepath),
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            st.toast(f"📥 Đã xuất: {filepath}", icon="📥")
-        except Exception as e:
-            st.error(f"❌ Lỗi xuất file: {str(e)}")
-
-    # === HIỂN THỊ NỘI DUNG CHÍNH ===
-    if st.session_state.results is None:
-        # Welcome screen
-        st.markdown("---")
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.markdown(
-                '<div style="text-align:center; padding: 60px 0;">'
-                '<div style="font-size:80px; margin-bottom:16px;">⚡</div>'
-                '<h1>Đối Chiếu Thuế GTGT</h1>'
-                '<p style="color:#8899aa; font-size:16px;">Công ty Điện lực Vũng Tàu</p>'
-                '<p style="color:#5a6a7a; margin-top:24px;">Chọn tháng ở sidebar bên trái, sau đó nhấn <strong style="color:#4fc3f7;">⚙️ Chạy Báo Cáo</strong></p>'
-                '</div>',
-                unsafe_allow_html=True
-            )
-        return
-
-    results = st.session_state.results
-    taxvta = st.session_state.taxvta
-
-    month_label = get_report_month_label(st.session_state.config) if st.session_state.config else selected_month
+    month_label = f"Tháng {selected_month[5:]}/{selected_month[:4]}"
     time_label = datetime.now().strftime('%H:%M:%S %d/%m/%Y')
 
     # Header text
     st.markdown(
         f'<h2 style="text-align:center;color:#4fc3f7;margin:0 0 2px 0;font-size:1.4rem;font-weight:700;letter-spacing:1px;">⚡ ỨNG DỤNG KIỂM DÒ THUẾ GTGT PCVT</h2>'
-        f'<p style="text-align:center;color:#8899aa;font-size:0.8rem;margin:0 0 4px 0;">📅 Dữ liệu: <strong>{month_label}</strong> &nbsp;|&nbsp; Xử lý lúc: {time_label}</p>',
+        f'<p style="text-align:center;color:#8899aa;font-size:0.8rem;margin:0 0 4px 0;">📅 Dữ liệu File Master: <strong>{month_label}</strong> &nbsp;|&nbsp; Xử lý lúc: {time_label}</p>',
         unsafe_allow_html=True
     )
 
@@ -1230,7 +1168,7 @@ def main():
     ])
 
     with tabs[0]:
-        render_tab_tonghop(taxvta, results)
+        render_tab_tonghop(summary_data, taxvta)
     with tabs[1]:
         render_tab_banra(results)
     with tabs[2]:

@@ -122,8 +122,8 @@ def get_report_month_label(config: dict) -> str:
 def resolve_file(filename: str, config: dict) -> Path:
     """
     Tìm file trong thư mục tháng.
-    Nếu tên chính xác không có, tự tìm file gần đúng dựa trên keyword.
-    Ví dụ: config ghi 'TA_035_TK3331.xlsx' nhưng thực tế là 'TA035_TK3331.xlsx'
+    Nếu tên chính xác không có, tự tìm file gần đúng dựa trên keyword và loại bỏ tiền tố như TK, dấu gạch.
+    Ví dụ: config ghi 'TA_035_TK3331.xlsx' nhưng thực tế là 'TA_035_3331.xlsx' hay 'TA035_TK3331.xlsx'
     """
     input_dir = get_input_dir(config)
     exact = input_dir / filename
@@ -132,29 +132,67 @@ def resolve_file(filename: str, config: dict) -> Path:
     if exact.exists():
         return exact
 
-    # 2. Tìm gần đúng: lấy keyword từ tên file (bỏ dấu _, khoảng trắng)
-    stem = Path(filename).stem.upper().replace("_", "").replace(" ", "")
+    files = [f for f in input_dir.iterdir() if f.is_file() and not f.name.startswith("~$")]
+
+    # 2. Tìm gần đúng: loại bỏ _, space, TK, dots
+    def clean_key(s: str) -> str:
+        s_upper = s.upper()
+        # Loại bỏ các ký tự phân cách và chữ TK
+        s_clean = s_upper.replace("_", "").replace("-", "").replace(" ", "").replace(".", "").replace("TK", "")
+        return s_clean
+
+    stem_clean = clean_key(Path(filename).stem)
     candidates = []
-    for f in input_dir.iterdir():
-        if not f.is_file() or f.name.startswith("~$"):
-            continue
-        f_stem = f.stem.upper().replace("_", "").replace(" ", "").replace(".", "")
-        if stem in f_stem or f_stem in stem:
+    for f in files:
+        f_clean = clean_key(f.stem)
+        if stem_clean in f_clean or f_clean in stem_clean:
             candidates.append(f)
 
     if len(candidates) == 1:
         return candidates[0]
     elif len(candidates) > 1:
-        # Ưu tiên file có đuôi giống nhất
         ext = Path(filename).suffix.lower()
         for c in candidates:
             if c.suffix.lower() == ext:
                 return c
         return candidates[0]
 
+    # 3. Tìm theo keyword đặc trưng của từng loại file nếu vẫn chưa match
+    fn_upper = filename.upper()
+
+    keywords_map = [
+        (["035"], ["035"]),
+        (["030", "3331"], ["030", "3331"]),
+        (["030", "1331"], ["030", "1331"]),
+        (["036"], ["036"]),
+        (["038"], ["038", "33895"]),
+        (["0903", "511"], ["903", "0903", "00903", "511"]),
+        (["KDDN4A", "4A"], ["KDDN4A", "4A"]),
+        (["HDON", "THOP"], ["HDON", "THOP"]),
+        (["SAN", "TOAN", "CAU"], ["TOAN", "CAU", "SANLUONG"]),
+    ]
+
+    for req_keys, target_keys in keywords_map:
+        if all(k in fn_upper for k in req_keys):
+            kw_candidates = []
+            for f in files:
+                f_name_up = f.name.upper()
+                if any(tk in f_name_up for tk in target_keys):
+                    kw_candidates.append(f)
+            if len(kw_candidates) == 1:
+                return kw_candidates[0]
+            elif len(kw_candidates) > 1:
+                if "1331" in fn_upper:
+                    sub = [c for c in kw_candidates if "1331" in c.name]
+                    if sub: return sub[0]
+                if "3331" in fn_upper:
+                    sub = [c for c in kw_candidates if "3331" in c.name]
+                    if sub: return sub[0]
+                return kw_candidates[0]
+
     raise FileNotFoundError(
         f"Không tìm thấy file '{filename}' trong thư mục '{input_dir}'. "
-        f"Các file hiện có: {[f.name for f in input_dir.iterdir() if f.is_file()]}"
+        f"Các file hiện có: {[f.name for f in files]}"
     )
 
 
