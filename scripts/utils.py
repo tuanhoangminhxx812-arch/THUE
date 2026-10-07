@@ -119,11 +119,14 @@ def get_report_month_label(config: dict) -> str:
     return f"Tháng {d.month:02d}/{d.year}"
 
 
-def resolve_file(filename: str, config: dict) -> Path:
+def resolve_file(filename: str, config: dict, file_key: str = None) -> Path:
     """
-    Tìm file trong thư mục tháng.
-    Nếu tên chính xác không có, tự tìm file gần đúng dựa trên keyword và loại bỏ tiền tố như TK, dấu gạch.
-    Ví dụ: config ghi 'TA_035_TK3331.xlsx' nhưng thực tế là 'TA_035_3331.xlsx' hay 'TA035_TK3331.xlsx'
+    Tìm file trong thư mục tháng theo cơ chế nhận diện thông minh:
+    1. Tìm file chính xác theo tên.
+    2. Nhận diện file theo từ khóa ERP chuẩn (hỗ trợ cả tên file ngắn như TA35.xlsx, GCS.xlsx,
+       0903.xlsx, 4A.xlsx, 333111.xlsx, 33895.xlsx, TA36.xlsx, 13311.xlsx, Nhom_TC.xlsx
+       lẫn các định dạng file xuất đầy đủ từ hệ thống ERP).
+    3. Tìm gần đúng (loại bỏ dấu gạch, khoảng trắng, tiền tố).
     """
     input_dir = get_input_dir(config)
     exact = input_dir / filename
@@ -132,12 +135,62 @@ def resolve_file(filename: str, config: dict) -> Path:
     if exact.exists():
         return exact
 
-    files = [f for f in input_dir.iterdir() if f.is_file() and not f.name.startswith("~$")]
+    files = [f for f in input_dir.iterdir() if f.is_file() and not f.name.startswith("~$") and f.suffix.lower() in [".xls", ".xlsx", ".csv"]]
 
-    # 2. Tìm gần đúng: loại bỏ _, space, TK, dots
+    # Suy luận file_key nếu chưa truyền vào
+    if not file_key:
+        cfg_inputs = config.get("input_files", {})
+        for k, v in cfg_inputs.items():
+            if v == filename:
+                file_key = k
+                break
+
+    # 2. Quy tắc nhận diện từ khóa ERP (Chuẩn theo Hướng dẫn cách viết ứng dụng ERP)
+    # Khớp chính xác theo quy tắc từ khóa tên file:
+    erp_rules = {
+        "bchdon": lambda name: "GCS" in name or "BCHDON" in name or "HDON" in name,
+        "gl0903": lambda name: "0903" in name or "GL0903" in name or "GL00903" in name or "511" in name or "903" in name,
+        "kd4a": lambda name: "4A" in name or "04A" in name or "KDDN4A" in name or "BIEU04A" in name or "RPTKDDN4A" in name,
+        "ta35": lambda name: ("TA35" in name or "035" in name or "01-1" in name or "01_1" in name) and ("36" not in name and "036" not in name),
+        "ta035": lambda name: ("TA35" in name or "035" in name or "01-1" in name or "01_1" in name) and ("36" not in name and "036" not in name),
+        "ta030_3331": lambda name: ("333111" in name or ("3331" in name and "1331" not in name) or "030_3331" in name),
+        "gl038": lambda name: "33895" in name or "038" in name or "GL038" in name or "GL_038" in name,
+        "ta36": lambda name: ("TA36" in name or "036" in name or "01-2" in name or "01_2" in name) and ("35" not in name and "035" not in name),
+        "ta036": lambda name: ("TA36" in name or "036" in name or "01-2" in name or "01_2" in name) and ("35" not in name and "035" not in name),
+        "ta030_1331": lambda name: ("13311" in name or ("1331" in name and "3331" not in name) or "030_1331" in name),
+        "nhomtc": lambda name: "NHOM" in name or "TC" in name or "TOANCAU" in name or "SANLUONG" in name,
+    }
+
+    # Nếu biết file_key, ưu tiên tìm theo rule của key đó
+    if file_key and file_key.lower() in erp_rules:
+        rule_fn = erp_rules[file_key.lower()]
+        matched_erp = [f for f in files if rule_fn(f.name.upper())]
+        if len(matched_erp) == 1:
+            return matched_erp[0]
+        elif len(matched_erp) > 1:
+            ext = Path(filename).suffix.lower()
+            for c in matched_erp:
+                if c.suffix.lower() == ext:
+                    return c
+            return matched_erp[0]
+
+    # Nếu không có file_key, suy đoán loại file từ filename
+    fn_upper = filename.upper()
+    for k, rule_fn in erp_rules.items():
+        if rule_fn(fn_upper):
+            matched_erp = [f for f in files if rule_fn(f.name.upper())]
+            if len(matched_erp) == 1:
+                return matched_erp[0]
+            elif len(matched_erp) > 1:
+                ext = Path(filename).suffix.lower()
+                for c in matched_erp:
+                    if c.suffix.lower() == ext:
+                        return c
+                return matched_erp[0]
+
+    # 3. Tìm gần đúng: loại bỏ _, space, TK, dots
     def clean_key(s: str) -> str:
         s_upper = s.upper()
-        # Loại bỏ các ký tự phân cách và chữ TK
         s_clean = s_upper.replace("_", "").replace("-", "").replace(" ", "").replace(".", "").replace("TK", "")
         return s_clean
 
@@ -157,59 +210,26 @@ def resolve_file(filename: str, config: dict) -> Path:
                 return c
         return candidates[0]
 
-    # 3. Tìm theo keyword đặc trưng của từng loại file nếu vẫn chưa match
-    fn_upper = filename.upper()
-
-    keywords_map = [
-        (["035"], ["035"]),
-        (["030", "3331"], ["030", "3331"]),
-        (["030", "1331"], ["030", "1331"]),
-        (["036"], ["036"]),
-        (["038"], ["038", "33895"]),
-        (["0903", "511"], ["903", "0903", "00903", "511"]),
-        (["KDDN4A", "4A"], ["KDDN4A", "4A"]),
-        (["HDON", "THOP"], ["HDON", "THOP"]),
-        (["SAN", "TOAN", "CAU"], ["TOAN", "CAU", "SANLUONG"]),
-    ]
-
-    for req_keys, target_keys in keywords_map:
-        if all(k in fn_upper for k in req_keys):
-            kw_candidates = []
-            for f in files:
-                f_name_up = f.name.upper()
-                if any(tk in f_name_up for tk in target_keys):
-                    kw_candidates.append(f)
-            if len(kw_candidates) == 1:
-                return kw_candidates[0]
-            elif len(kw_candidates) > 1:
-                if "1331" in fn_upper:
-                    sub = [c for c in kw_candidates if "1331" in c.name]
-                    if sub: return sub[0]
-                if "3331" in fn_upper:
-                    sub = [c for c in kw_candidates if "3331" in c.name]
-                    if sub: return sub[0]
-                return kw_candidates[0]
-
     raise FileNotFoundError(
         f"Không tìm thấy file '{filename}' trong thư mục '{input_dir}'. "
         f"Các file hiện có: {[f.name for f in files]}"
     )
 
 
-def read_excel_file(filename: str, config: dict, **kwargs) -> pd.DataFrame:
+def read_excel_file(filename: str, config: dict, file_key: str = None, **kwargs) -> pd.DataFrame:
     """
     Đọc file Excel từ thư mục ĐẦU VÀO/YYYY-MM/.
-    Tự động tìm file gần đúng nếu tên không khớp chính xác.
+    Tự động tìm file gần đúng hoặc theo từ khóa ERP.
     Tự động chọn engine phù hợp (.xls vs .xlsx).
     """
-    filepath = resolve_file(filename, config)
+    filepath = resolve_file(filename, config, file_key=file_key)
     engine = "xlrd" if str(filepath).endswith(".xls") else "openpyxl"
     return pd.read_excel(filepath, engine=engine, **kwargs)
 
 
-def read_excel_sheets(filename: str, config: dict) -> pd.ExcelFile:
+def read_excel_sheets(filename: str, config: dict, file_key: str = None) -> pd.ExcelFile:
     """Mở file Excel và trả về ExcelFile object để đọc nhiều sheet."""
-    filepath = resolve_file(filename, config)
+    filepath = resolve_file(filename, config, file_key=file_key)
     engine = "xlrd" if str(filepath).endswith(".xls") else "openpyxl"
     return pd.ExcelFile(filepath, engine=engine)
 

@@ -363,73 +363,215 @@ def render_sidebar():
 
 
 # ============================================================
-# TAB 1: TỔNG HỢP ĐỐI CHIẾU
+# TAB 1: DASHBOARD KIỂM DÒ THUẾ 4 KHỐI
 # ============================================================
 def render_tab_tonghop(summary_data, taxvta=None):
-    """Tab tổng hợp đối chiếu từ file Master TAX_VTA."""
-    st.markdown("### 📊 Bảng Tổng Hợp Đối Chiếu Thuế GTGT (Từ File Master TAX_VTA)")
+    """
+    Tab Dashboard Kiểm Dò Thuế GTGT - Bố cục chuẩn 4 khối trực quan
+    theo tài liệu Hướng dẫn cách viết ứng dụng ERP.
+    """
+    st.markdown("### 📊 DASHBOARD KIỂM DÒ ĐỐI SOÁT THUẾ GTGT")
+    st.caption("Đối soát 3 chiều giữa Hóa đơn (TA35/TA36) - Kinh doanh (GCS/4A) - Sổ cái tài chính (GL)")
 
     cards = summary_data.get("summary_cards", {})
-    col1, col2, col3 = st.columns(3)
+    is_all_pass = cards.get("is_all_pass", False)
+    spc_valid = cards.get("spc_valid", True)
+    spc_target = cards.get("spc_target", 60549888887)
+
+    # === KHỐI 1: 4 THẺ KPI TỔNG QUAN & CẢNH BÁO LỆCH ===
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("🔴 Thuế Đầu Ra (TA35)", fmt(cards.get("thue_dau_ra")))
+        st.markdown(
+            f"""
+            <div style="background: rgba(46, 125, 50, 0.12); border: 1px solid #4caf50; border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="color: #81c784; font-size: 0.85rem; font-weight: 600; text-transform: uppercase;">🟢 Thuế Đầu Vào [25]</div>
+                <div style="color: #4caf50; font-size: 1.45rem; font-weight: 700; margin-top: 4px;">{fmt(cards.get("thue_dau_vao"))}</div>
+                <div style="color: #9e9e9e; font-size: 0.75rem; margin-top: 2px;">Khấu trừ kỳ này</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
     with col2:
-        st.metric("🟢 Thuế Đầu Vào (TK1331)", fmt(cards.get("thue_dau_vao")))
+        st.markdown(
+            f"""
+            <div style="background: rgba(239, 108, 0, 0.12); border: 1px solid #ff9800; border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="color: #ffb74d; font-size: 0.85rem; font-weight: 600; text-transform: uppercase;">🔴 Thuế Đầu Ra [28]</div>
+                <div style="color: #ff9800; font-size: 1.45rem; font-weight: 700; margin-top: 4px;">{fmt(cards.get("thue_dau_ra"))}</div>
+                <div style="color: #9e9e9e; font-size: 0.75rem; margin-top: 2px;">Phát sinh trong kỳ</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
     with col3:
-        st.metric("📌 Thuế Phải Nộp", fmt(cards.get("thue_phai_nop")))
+        st.markdown(
+            f"""
+            <div style="background: rgba(2, 136, 209, 0.12); border: 1px solid #03a9f4; border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="color: #4fc3f7; font-size: 0.85rem; font-weight: 600; text-transform: uppercase;">⚖️ Thuế Phải Nộp [36]</div>
+                <div style="color: #03a9f4; font-size: 1.45rem; font-weight: 700; margin-top: 4px;">{fmt(cards.get("thue_phai_nop"))}</div>
+                <div style="color: #9e9e9e; font-size: 0.75rem; margin-top: 2px;">Nghĩa vụ NSNN</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with col4:
+        status_bg = "rgba(46, 125, 50, 0.2)" if is_all_pass else "rgba(211, 47, 47, 0.2)"
+        status_border = "#4caf50" if is_all_pass else "#f44336"
+        status_color = "#66bb6a" if is_all_pass else "#ef5350"
+        status_text = "KHỚP DỮ LIỆU (PASS)" if is_all_pass else "LỆCH SỐ LIỆU (CẦN KIỂM TRA)"
+        status_sub = "Số liệu 3 chiều đồng bộ" if is_all_pass else "Phát hiện chênh lệch"
+
+        st.markdown(
+            f"""
+            <div style="background: {status_bg}; border: 2px solid {status_border}; border-radius: 8px; padding: 12px; text-align: center;">
+                <div style="color: {status_color}; font-size: 0.85rem; font-weight: 600; text-transform: uppercase;">🛡️ TRẠNG THÁI KIỂM DÒ</div>
+                <div style="color: {status_color}; font-size: 1.15rem; font-weight: 800; margin-top: 6px;">{status_text}</div>
+                <div style="color: #9e9e9e; font-size: 0.75rem; margin-top: 2px;">{status_sub}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    # Widget cảnh báo số dư Nợ SPC
+    if spc_valid:
+        st.markdown(
+            f"""
+            <div style="background: rgba(33, 150, 243, 0.08); border-left: 4px solid #2196f3; padding: 8px 14px; border-radius: 4px; margin-top: 12px; font-size: 0.9rem;">
+                🔒 <strong>Số Dư Nợ SPC Cố Định:</strong> {fmt(spc_target)} đ 
+                <span style="color: #4caf50; font-weight: 600; margin-left: 8px;">(✓ Khớp chuẩn - Không được sai lệch)</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(
+            f"""
+            <div style="background: rgba(244, 67, 54, 0.15); border-left: 4px solid #f44336; padding: 8px 14px; border-radius: 4px; margin-top: 12px; font-size: 0.9rem; color: #ff5252;">
+                🚨 <strong>CẢNH BÁO: SAI LỆCH SỐ DƯ NỢ SPC!</strong> Số dư bên Nợ TK 13311 khác giá trị cố định <strong>{fmt(spc_target)} đ</strong>! Vui lòng kiểm tra lại dữ liệu đầu vào.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     st.divider()
 
-    # Phần 1: Bán Ra TA35
-    st.markdown("#### 🔴 Phần 1: Thuế GTGT Đầu Ra (Phân Loại Bán Ra TA35)")
-    ta35_items = summary_data.get("ban_ra", {}).get("ta35_items", [])
-    if ta35_items:
-        df_ta35 = pd.DataFrame(ta35_items)
-        df_ta35.columns = ["Mã Phân Loại", "Doanh Số Chưa Thuế", "Thuế GTGT"]
-        df_ta35["Doanh Số Chưa Thuế"] = df_ta35["Doanh Số Chưa Thuế"].apply(fmt)
-        df_ta35["Thuế GTGT"] = df_ta35["Thuế GTGT"].apply(fmt)
-        
-        total_ds = summary_data.get("ban_ra", {}).get("ta35_total", {}).get("doanh_so", 0)
-        total_thue = summary_data.get("ban_ra", {}).get("ta35_total", {}).get("thue", 0)
-        df_total = pd.DataFrame([{"Mã Phân Loại": "CỘNG", "Doanh Số Chưa Thuế": fmt(total_ds), "Thuế GTGT": fmt(total_thue)}])
-        df_display = pd.concat([df_ta35, df_total], ignore_index=True)
-        st.dataframe(df_display, use_container_width=True, hide_index=True)
+    # === KHỐI 2: ĐỐI SOÁT MUA VÀO (TA36 vs SỔ CÁI 13311) ===
+    st.markdown("#### 📥 Khối 2: Bảng Đối Soát Doanh Số & Thuế Đầu Vào (TA36 vs Sổ Cái 13311)")
+    k2 = summary_data.get("khoi2_muavao", {})
+    k2_rows = k2.get("rows", [])
+    k2_tot = k2.get("total", {})
+
+    if k2_rows:
+        display_rows = []
+        for r in k2_rows:
+            display_rows.append({
+                "STT": r["stt"],
+                "Mã TK": r["ma_tk"],
+                "Nội Dung Diễn Giải": r["noi_dung"],
+                "Doanh Số TA36": fmt(r["doanh_so"]),
+                "Tiền Thuế TA36": fmt(r["thue"]),
+                "Tiền Thuế Sổ Cái": fmt(r["so_cai"]),
+                "Chênh Lệch (TA36 - Sổ Cái)": fmt(r["chenh_lech"]),
+                "Trạng Thái": r["status"]
+            })
+        if k2_tot:
+            display_rows.append({
+                "STT": "Cộng",
+                "Mã TK": "",
+                "Nội Dung Diễn Giải": k2_tot["noi_dung"],
+                "Doanh Số TA36": fmt(k2_tot["doanh_so"]),
+                "Tiền Thuế TA36": fmt(k2_tot["thue"]),
+                "Tiền Thuế Sổ Cái": fmt(k2_tot["so_cai"]),
+                "Chênh Lệch (TA36 - Sổ Cái)": fmt(k2_tot["chenh_lech"]),
+                "Trạng Thái": k2_tot["status"]
+            })
+
+        df_k2 = pd.DataFrame(display_rows)
+        styled_k2 = df_k2.style.applymap(highlight_diff, subset=["Chênh Lệch (TA36 - Sổ Cái)"]).applymap(highlight_ok, subset=["Trạng Thái"])
+        st.dataframe(styled_k2, use_container_width=True, hide_index=True)
 
     st.divider()
 
-    # Phần 2: Mua Vào TA36 / 13311
-    st.markdown("#### 🟢 Phần 2: Thuế GTGT Đầu Vào (TK 13311 & TK 13313)")
-    mv = summary_data.get("mua_vao", {})
-    mv_rows = [
-        {"Tài Khoản": "TK 13311 (Hàng hóa, dịch vụ SXKD)", "Doanh Số Chưa Thuế": fmt(mv.get("13311", {}).get("doanh_so")), "Thuế GTGT": fmt(mv.get("13311", {}).get("thue"))},
-        {"Tài Khoản": "TK 13313 (Đầu tư XDCB)", "Doanh Số Chưa Thuế": fmt(mv.get("13313", {}).get("doanh_so")), "Thuế GTGT": fmt(mv.get("13313", {}).get("thue"))},
-        {"Tài Khoản": "CỘNG THUẾ ĐẦU VÀO", "Doanh Số Chưa Thuế": fmt(mv.get("total", {}).get("doanh_so")), "Thuế GTGT": fmt(mv.get("total", {}).get("thue"))},
-    ]
-    st.dataframe(pd.DataFrame(mv_rows), use_container_width=True, hide_index=True)
+    # === KHỐI 3: MA TRẬN ĐỐI SOÁT ĐẦU RA 3 CHIỀU (GCS vs 4A vs GL0903) ===
+    st.markdown("#### ⚡ Khối 3: Ma Trận Kiểm Dò Doanh Thu & Thuế Đầu Ra 3 Chiều (GCS vs Báo Cáo 4A vs Sổ GL 0903)")
+    k3 = summary_data.get("khoi3_matran3d", {})
+    k3_rows = k3.get("rows", [])
+    k3_tot = k3.get("total", {})
+
+    if k3_rows:
+        display_k3 = []
+        for r in k3_rows:
+            display_k3.append({
+                "Hạng Mục Doanh Thu": r["hang_muc"],
+                "Mã DFF": r["ma_dff"],
+                "Doanh Số GCS": fmt(r["gcs"]),
+                "Doanh Số 4A": fmt(r["kd4a"]),
+                "Doanh Số GL 0903": fmt(r["gl0903"]),
+                "Lệch (GCS - 4A)": fmt(r["lech_gcs_4a"]),
+                "Lệch (4A - GL0903)": fmt(r["lech_4a_gl"]),
+                "Đánh Giá": r["danh_gia"]
+            })
+        if k3_tot:
+            display_k3.append({
+                "Hạng Mục Doanh Thu": k3_tot["hang_muc"],
+                "Mã DFF": "",
+                "Doanh Số GCS": fmt(k3_tot["gcs"]),
+                "Doanh Số 4A": fmt(k3_tot["kd4a"]),
+                "Doanh Số GL 0903": fmt(k3_tot["gl0903"]),
+                "Lệch (GCS - 4A)": fmt(k3_tot["lech_gcs_4a"]),
+                "Lệch (4A - GL0903)": fmt(k3_tot["lech_4a_gl"]),
+                "Đánh Giá": k3_tot["danh_gia"]
+            })
+
+        df_k3 = pd.DataFrame(display_k3)
+        styled_k3 = df_k3.style.applymap(highlight_diff, subset=["Lệch (GCS - 4A)", "Lệch (4A - GL0903)"]).applymap(highlight_ok, subset=["Đánh Giá"])
+        st.dataframe(styled_k3, use_container_width=True, hide_index=True)
 
     st.divider()
 
-    # Phần 3: Bảng kê GCS Bán ra
-    st.markdown("#### ⚡ Phần 3: Bảng Kê GCS Tiền Điện (Phát Hành Hóa Đơn)")
-    gcs = summary_data.get("ban_ra", {})
-    gcs_rows = [
-        {"Kỳ Phát Hành": "TRONG THÁNG", "Doanh Số Chưa Thuế": fmt(gcs.get("trong_thang", {}).get("doanh_so")), "Thuế GTGT": fmt(gcs.get("trong_thang", {}).get("thue"))},
-        {"Kỳ Phát Hành": "CUỐI THÁNG (Kỳ 3 sang tháng sau)", "Doanh Số Chưa Thuế": fmt(gcs.get("cuoi_thang", {}).get("doanh_so")), "Thuế GTGT": fmt(gcs.get("cuoi_thang", {}).get("thue"))},
-        {"Kỳ Phát Hành": "CỘNG BẢNG KÊ GCS", "Doanh Số Chưa Thuế": fmt(gcs.get("total_gcs", {}).get("doanh_so")), "Thuế GTGT": fmt(gcs.get("total_gcs", {}).get("thue"))},
-    ]
-    st.dataframe(pd.DataFrame(gcs_rows), use_container_width=True, hide_index=True)
+    # === KHỐI 4: TỜ KHAI 01/GTGT VÀ BÚT TOÁN KẾT CHUYỂN, CẤN TRỪ ===
+    st.markdown("#### 📑 Khối 4: Tổng Hợp Chỉ Tiêu Lên Tờ Khai 01/GTGT & Bút Toán Kết Chuyển, Cấn Trừ")
+    col_k4a, col_k4b = st.columns(2)
+
+    with col_k4a:
+        st.markdown("##### 📄 Bảng A: Chỉ Tiêu Lên Tờ Khai Thuế 01/GTGT")
+        tokhai_items = summary_data.get("khoi4_tokhai", [])
+        if tokhai_items:
+            df_tk = pd.DataFrame([
+                {
+                    "Mã Ô": it["ma_o"],
+                    "Chỉ Tiêu Tờ Khai": it["chi_tieu"],
+                    "Giá Trị HHDV": fmt(it["gia_tri_hhdv"]) if it["gia_tri_hhdv"] is not None else "",
+                    "Tiền Thuế GTGT": fmt(it["thue_gtgt"]) if it["thue_gtgt"] is not None else "",
+                }
+                for it in tokhai_items
+            ])
+            st.dataframe(df_tk, use_container_width=True, hide_index=True)
+
+    with col_k4b:
+        st.markdown("##### ⚖️ Bảng B: Cấn Trừ & Số Dư Tài Khoản (TK 333111 vs TK 13311)")
+        cantru_items = summary_data.get("khoi4_cantru", [])
+        if cantru_items:
+            df_ct = pd.DataFrame([
+                {
+                    "Tài Khoản": it["tai_khoan"],
+                    "Nội Dung Bút Toán / Số Dư": it["noi_dung"],
+                    "Số Tiền": fmt(it["so_tien"]),
+                    "Ghi Chú": it["ghi_chu"]
+                }
+                for it in cantru_items
+            ])
+            st.dataframe(df_ct, use_container_width=True, hide_index=True)
 
     st.divider()
 
-    # === BẢNG CROSS-CHECK ===
-    st.markdown("#### 🔍 Kiểm Tra Chéo Giữa Các Bảng")
+    # === BẢNG CROSS-CHECK CHI TIẾT ===
+    st.markdown("#### 🔍 Chi Tiết Các Điểm Kiểm Tra Chéo Toàn Bộ Hệ Thống")
     cross_checks = taxvta.get("cross_checks", []) if taxvta else []
     if cross_checks:
         cc_df = pd.DataFrame(cross_checks)
         cc_display = cc_df[["name", "source_a", "value_a", "source_b", "value_b", "chenh_lech", "status"]].copy()
         cc_display.columns = ["Nội dung", "Nguồn A", "Giá trị A", "Nguồn B", "Giá trị B", "Chênh lệch", "Trạng thái"]
 
-        # Format số với dấu chấm
         for col in ["Giá trị A", "Giá trị B", "Chênh lệch"]:
             cc_display[col] = cc_display[col].apply(lambda x: fmt(x) if pd.notna(x) else "")
 
