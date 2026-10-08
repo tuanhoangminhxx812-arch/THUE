@@ -328,7 +328,7 @@ def render_sidebar():
                 file_count = next((m["file_count"] for m in months if m["month"] == selected_month), 0)
                 st.caption(f"📁 {file_count} file trong thư mục")
             else:
-                selected_month = "2026-05"
+                selected_month = "2026-09"
                 st.warning("Chưa có thư mục tháng nào trong ĐẦU VÀO/")
         else:
             config = load_config()

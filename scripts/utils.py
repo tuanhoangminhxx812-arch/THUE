@@ -66,7 +66,7 @@ def scan_available_months() -> list:
     if not base.exists():
         return months
 
-    for item in sorted(base.iterdir()):
+    for item in sorted(base.iterdir(), reverse=True):
         if item.is_dir():
             name = item.name
             # Kiểm tra format YYYY-MM
