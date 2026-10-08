@@ -76,7 +76,10 @@ def process_ta036(config: dict) -> dict:
 
     def assign_account(row):
         loai_hinh = clean_string(row.get("LoaiHinhSXKD", ""))
-        if xdcb_keyword.upper() in loai_hinh.upper():
+        mat_hang = clean_string(row.get("MatHang", "")).upper()
+        so_hd = clean_string(row.get("SoHD", ""))
+        if (xdcb_keyword.upper() in loai_hinh.upper() or 
+            "1531" in so_hd or "1531" in mat_hang):
             return xdcb_account
         return default_account
 

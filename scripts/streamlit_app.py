@@ -247,43 +247,44 @@ def build_t_account_html(kiem_do):
 
     # === TK333111 (bên trái) ===
     left = '<div class="t-account">'
-    left += '<div class="t-account-title left">TK 333111</div>'
+    left += '<div class="t-account-title left">TK 333111 - Thuế GTGT Phải Nộp</div>'
     left += '<div class="t-account-header left"><span></span><span>NỢ</span><span>CÓ</span></div>'
-    left += t_row("Số dư HCM", tk333.get("du_dau_ky_hcm"), None, "Số này sẽ được khấu trừ trong năm 2026")
-    left += t_row("Số dư SPC", tk333.get("du_dau_ky_spc"), None, "Số nộp dư của SCP Nợ TK333111 → không được khấu trừ, để nguyên")
-    left += t_row("PS tháng này", None, tk333.get("ps_co"), "Cộng PS Có TK333111 ở bảng TA_030_TK3331")
-    left += t_row("KC 13311→333111 (SXKD)", tk333.get("kc_13311"), None, "Cộng PS Có TK13311 ở bảng TA_030_TK1331")
-    left += t_row("KC 13313→333111 (XDCB)", tk333.get("kc_13313"), None, "Cộng PS Có TK13313 ở bảng TA_030_TK1331")
+    left += t_row("Dư Nợ đầu kỳ HCM", tk333.get("du_dau_ky_hcm"), None, "Số nộp thừa kỳ trước chuyển sang")
+    if safe_float(tk333.get("du_dau_ky_spc", 0)) > 0:
+        left += t_row("Số dư SPC", tk333.get("du_dau_ky_spc"), None, "Số nộp dư của SPC Nợ TK333111")
+    left += t_row("PS Có trong kỳ", None, tk333.get("ps_co"), "Thuế đầu ra phát sinh (TA030_TK3331)")
+    left += t_row("KC 13311→333111 (SXKD)", tk333.get("kc_13311"), None, "Bù trừ thuế mua vào SXKD")
+    left += t_row("KC 13313→333111 (XDCB)", tk333.get("kc_13313"), None, "Bù trừ thuế mua vào XDCB")
 
     tong_no = safe_float(tk333.get("du_dau_ky_hcm", 0)) + safe_float(tk333.get("kc_13311", 0)) + safe_float(tk333.get("kc_13313", 0))
-    left += t_row("Tổng", tong_no, tk333.get("ps_co"), is_total=True)
-    left += t_row("Số dư HCM", tk333.get("du_cuoi_ky_hcm"), None, "Số còn được cấn trừ tháng sau")
-    left += t_row("Số dư SPC", tk333.get("du_dau_ky_spc"), None, "Giữ nguyên số dư")
-
-    cong_333 = safe_float(tk333.get("du_cuoi_ky_hcm", 0)) + safe_float(tk333.get("du_dau_ky_spc", 0))
-    left += t_row("CỘNG", cong_333, None, "Số thuế phải nộp", is_total=True)
+    left += t_row("Tổng phát sinh & Dư ĐK", tong_no, tk333.get("ps_co"), is_total=True)
+    
+    du_co_cuoi = safe_float(tk333.get("ps_co", 0)) - tong_no
+    if du_co_cuoi >= 0:
+        left += t_row("Dư Có cuối kỳ (Phải nộp)", None, du_co_cuoi, "Nghĩa vụ thuế GTGT phải nộp NSNN", is_total=True, color="blue")
+    else:
+        left += t_row("Dư Nợ cuối kỳ (Nộp thừa)", abs(du_co_cuoi), None, "Số thuế còn được khấu trừ/cấn trừ kỳ sau", is_total=True, color="blue")
     left += '</div>'
 
     # === TK13311 (bên phải) ===
     right = '<div class="t-account">'
-    right += '<div class="t-account-title right">TK 13311</div>'
+    right += '<div class="t-account-title right">TK 13311 - Thuế GTGT Được Khấu Trừ</div>'
     right += '<div class="t-account-header right"><span></span><span>NỢ</span><span>CÓ</span></div>'
-    right += t_row("Số dư SPC (đúng)", tk133.get("du_dau_ky"), None, "Số dư Nợ 13311 của SPC không được, để nguyên", color="green")
-    right += t_row("PS tháng này", tk133.get("ps_no"), None, "Cộng phát sinh", color="green")
-    right += t_row("KC 133→333", None, tk133.get("kc_333"), "Cộng PS Có TK13311 ở bảng TA_030_TK1331", color="green")
+    right += t_row("Dư Nợ SPC đầu kỳ", tk133.get("du_dau_ky"), None, "Số dư cố định 60.549.888.887 đ (giữ nguyên)", color="green")
+    right += t_row("PS Nợ trong kỳ", tk133.get("ps_no"), None, "Thuế mua vào phát sinh kỳ này (TA036)", color="green")
+    right += t_row("KC 133→333", None, tk133.get("kc_333"), "Kết chuyển sang TK 333111 bù trừ", color="green")
 
     tong_no_133 = safe_float(tk133.get("du_dau_ky", 0)) + safe_float(tk133.get("ps_no", 0))
     tong_co_133 = safe_float(tk133.get("kc_333", 0))
-    right += t_row("", tong_no_133, tong_co_133, is_total=True, color="green")
+    right += t_row("Tổng Nợ / Có", tong_no_133, tong_co_133, is_total=True, color="green")
 
     du_cuoi = tong_no_133 - tong_co_133
-    right += t_row("Dư cuối kỳ", du_cuoi, None, "Giữ nguyên số dư", color="green")
+    right += t_row("Dư Nợ cuối kỳ", du_cuoi, None, "Dư Nợ cuối kỳ tài khoản 13311", color="green")
 
     du_spc = safe_float(tk133.get("du_cuoi_ky_spc", 0))
-    right += t_row("Số dư SPC", du_spc, None, "Số này giữ nguyên", color="green")
-
     con_kt = du_cuoi - du_spc
-    right += t_row("Còn được KT thực tế", con_kt, None, "Số còn được khấu trừ", is_total=True, color="green")
+    right += t_row("Dư Nợ SPC cố định", du_spc, None, "Yêu cầu bắt buộc giữ nguyên", color="green")
+    right += t_row("Còn được KT thực tế", con_kt, None, "Số thuế còn được khấu trừ kỳ sau", is_total=True, color="green")
     right += '</div>'
 
     html = f'<div class="t-account-container">{left}<div class="t-divider">⟷</div>{right}</div>'
@@ -367,8 +368,10 @@ def render_sidebar():
 # ============================================================
 def render_tab_tonghop(summary_data, taxvta=None):
     """
-    Tab Dashboard Kiểm Dò Thuế GTGT - Bố cục chuẩn 4 khối trực quan
-    theo tài liệu Hướng dẫn cách viết ứng dụng ERP.
+    Tab Dashboard Kiểm Dò Thuế GTGT - Rút gọn, tinh giản theo đúng yêu cầu:
+    1. Đối chiếu chênh lệch giữa bảng TA036 với TA030 của 2 TK 13311 và 13313.
+    2. Đối chiếu chênh lệch giữa 2 bảng TA035 với TA030 của các TK 333111, 333113, 333114.
+    3. Đối chiếu chênh lệch giữa các bảng GCS, 4A và 0903.
     """
     st.markdown("### 📊 DASHBOARD KIỂM DÒ ĐỐI SOÁT THUẾ GTGT")
     st.caption("Đối soát 3 chiều giữa Hóa đơn (TA35/TA36) - Kinh doanh (GCS/4A) - Sổ cái tài chính (GL)")
@@ -437,7 +440,7 @@ def render_tab_tonghop(summary_data, taxvta=None):
             f"""
             <div style="background: rgba(33, 150, 243, 0.08); border-left: 4px solid #2196f3; padding: 8px 14px; border-radius: 4px; margin-top: 12px; font-size: 0.9rem;">
                 🔒 <strong>Số Dư Nợ SPC Cố Định:</strong> {fmt(spc_target)} đ 
-                <span style="color: #4caf50; font-weight: 600; margin-left: 8px;">(✓ Khớp chuẩn - Không được sai lệch)</span>
+                <span style="color: #4caf50; font-weight: 600; margin-left: 8px;">(✓ Khớp chuẩn - Không bị sai lệch)</span>
             </div>
             """,
             unsafe_allow_html=True
@@ -454,8 +457,8 @@ def render_tab_tonghop(summary_data, taxvta=None):
 
     st.divider()
 
-    # === KHỐI 2: ĐỐI SOÁT MUA VÀO (TA36 vs SỔ CÁI 13311) ===
-    st.markdown("#### 📥 Khối 2: Bảng Đối Soát Doanh Số & Thuế Đầu Vào (TA36 vs Sổ Cái 13311)")
+    # === BẢNG 1: ĐỐI SOÁT MUA VÀO (TA36 vs SỔ CÁI 13311) ===
+    st.markdown("#### 1️⃣ Bảng 1: Đối Chiếu Chênh Lệch Giữa Bảng TA036 với TA030 (TK 13311 & TK 13313)")
     k2 = summary_data.get("khoi2_muavao", {})
     k2_rows = k2.get("rows", [])
     k2_tot = k2.get("total", {})
@@ -491,8 +494,45 @@ def render_tab_tonghop(summary_data, taxvta=None):
 
     st.divider()
 
-    # === KHỐI 3: MA TRẬN ĐỐI SOÁT ĐẦU RA 3 CHIỀU (GCS vs 4A vs GL0903) ===
-    st.markdown("#### ⚡ Khối 3: Ma Trận Kiểm Dò Doanh Thu & Thuế Đầu Ra 3 Chiều (GCS vs Báo Cáo 4A vs Sổ GL 0903)")
+    # === BẢNG 2: ĐỐI SOÁT BÁN RA (TA35 vs SỔ CÁI 3331) ===
+    st.markdown("#### 2️⃣ Bảng 2: Đối Chiếu Chênh Lệch Giữa Bảng TA035 với TA030 (TK 333111, 333113, 333114)")
+    b2 = summary_data.get("bang2_banra", {})
+    b2_rows = b2.get("rows", [])
+    b2_tot = b2.get("total", {})
+
+    if b2_rows:
+        display_b2 = []
+        for r in b2_rows:
+            display_b2.append({
+                "STT": r["stt"],
+                "Mã TK": r["ma_tk"],
+                "Nội Dung Diễn Giải": r["noi_dung"],
+                "Doanh Số TA35": fmt(r["doanh_so"]),
+                "Tiền Thuế TA35": fmt(r["thue"]),
+                "Tiền Thuế Sổ Cái": fmt(r["so_cai"]),
+                "Chênh Lệch (TA35 - Sổ Cái)": fmt(r["chenh_lech"]),
+                "Trạng Thái": r["status"]
+            })
+        if b2_tot:
+            display_b2.append({
+                "STT": "Cộng",
+                "Mã TK": "",
+                "Nội Dung Diễn Giải": b2_tot["noi_dung"],
+                "Doanh Số TA35": fmt(b2_tot["doanh_so"]),
+                "Tiền Thuế TA35": fmt(b2_tot["thue"]),
+                "Tiền Thuế Sổ Cái": fmt(b2_tot["so_cai"]),
+                "Chênh Lệch (TA35 - Sổ Cái)": fmt(b2_tot["chenh_lech"]),
+                "Trạng Thái": b2_tot["status"]
+            })
+
+        df_b2 = pd.DataFrame(display_b2)
+        styled_b2 = df_b2.style.applymap(highlight_diff, subset=["Chênh Lệch (TA35 - Sổ Cái)"]).applymap(highlight_ok, subset=["Trạng Thái"])
+        st.dataframe(styled_b2, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # === BẢNG 3: MA TRẬN ĐỐI SOÁT ĐẦU RA 3 CHIỀU (GCS vs 4A vs GL0903) ===
+    st.markdown("#### 3️⃣ Bảng 3: Đối Chiếu Chênh Lệch Giữa Các Bảng GCS, 4A và 0903")
     k3 = summary_data.get("khoi3_matran3d", {})
     k3_rows = k3.get("rows", [])
     k3_tot = k3.get("total", {})
@@ -525,58 +565,6 @@ def render_tab_tonghop(summary_data, taxvta=None):
         df_k3 = pd.DataFrame(display_k3)
         styled_k3 = df_k3.style.applymap(highlight_diff, subset=["Lệch (GCS - 4A)", "Lệch (4A - GL0903)"]).applymap(highlight_ok, subset=["Đánh Giá"])
         st.dataframe(styled_k3, use_container_width=True, hide_index=True)
-
-    st.divider()
-
-    # === KHỐI 4: TỜ KHAI 01/GTGT VÀ BÚT TOÁN KẾT CHUYỂN, CẤN TRỪ ===
-    st.markdown("#### 📑 Khối 4: Tổng Hợp Chỉ Tiêu Lên Tờ Khai 01/GTGT & Bút Toán Kết Chuyển, Cấn Trừ")
-    col_k4a, col_k4b = st.columns(2)
-
-    with col_k4a:
-        st.markdown("##### 📄 Bảng A: Chỉ Tiêu Lên Tờ Khai Thuế 01/GTGT")
-        tokhai_items = summary_data.get("khoi4_tokhai", [])
-        if tokhai_items:
-            df_tk = pd.DataFrame([
-                {
-                    "Mã Ô": it["ma_o"],
-                    "Chỉ Tiêu Tờ Khai": it["chi_tieu"],
-                    "Giá Trị HHDV": fmt(it["gia_tri_hhdv"]) if it["gia_tri_hhdv"] is not None else "",
-                    "Tiền Thuế GTGT": fmt(it["thue_gtgt"]) if it["thue_gtgt"] is not None else "",
-                }
-                for it in tokhai_items
-            ])
-            st.dataframe(df_tk, use_container_width=True, hide_index=True)
-
-    with col_k4b:
-        st.markdown("##### ⚖️ Bảng B: Cấn Trừ & Số Dư Tài Khoản (TK 333111 vs TK 13311)")
-        cantru_items = summary_data.get("khoi4_cantru", [])
-        if cantru_items:
-            df_ct = pd.DataFrame([
-                {
-                    "Tài Khoản": it["tai_khoan"],
-                    "Nội Dung Bút Toán / Số Dư": it["noi_dung"],
-                    "Số Tiền": fmt(it["so_tien"]),
-                    "Ghi Chú": it["ghi_chu"]
-                }
-                for it in cantru_items
-            ])
-            st.dataframe(df_ct, use_container_width=True, hide_index=True)
-
-    st.divider()
-
-    # === BẢNG CROSS-CHECK CHI TIẾT ===
-    st.markdown("#### 🔍 Chi Tiết Các Điểm Kiểm Tra Chéo Toàn Bộ Hệ Thống")
-    cross_checks = taxvta.get("cross_checks", []) if taxvta else []
-    if cross_checks:
-        cc_df = pd.DataFrame(cross_checks)
-        cc_display = cc_df[["name", "source_a", "value_a", "source_b", "value_b", "chenh_lech", "status"]].copy()
-        cc_display.columns = ["Nội dung", "Nguồn A", "Giá trị A", "Nguồn B", "Giá trị B", "Chênh lệch", "Trạng thái"]
-
-        for col in ["Giá trị A", "Giá trị B", "Chênh lệch"]:
-            cc_display[col] = cc_display[col].apply(lambda x: fmt(x) if pd.notna(x) else "")
-
-        styled = cc_display.style.applymap(highlight_diff, subset=["Chênh lệch"]).applymap(highlight_ok, subset=["Trạng thái"])
-        st.dataframe(styled, use_container_width=True, hide_index=True)
 
 
 
@@ -1296,15 +1284,10 @@ def main():
         unsafe_allow_html=True
     )
 
-    # === TABS ===
+    # === TABS: CHỈ GIỮ 4 SHEET CỐT LÕI THEO YÊU CẦU ===
     tabs = st.tabs([
         "📊 Tổng Hợp",
-        "📤 Bán Ra",
-        "📥 Mua Vào",
         "🔍 Kiểm Dò",
-        "⚠️ Cảnh Báo",
-        "🔎 Drill Down",
-        "📋 Chi Tiết",
         "📝 Bảng Kê 01",
         "📄 Tờ Khai 01"
     ])
@@ -1312,20 +1295,10 @@ def main():
     with tabs[0]:
         render_tab_tonghop(summary_data, taxvta)
     with tabs[1]:
-        render_tab_banra(results)
-    with tabs[2]:
-        render_tab_muavao(results)
-    with tabs[3]:
         render_tab_kiemdo(taxvta)
-    with tabs[4]:
-        render_tab_canhbao(results)
-    with tabs[5]:
-        render_tab_drilldown(results)
-    with tabs[6]:
-        render_tab_chitiet(results)
-    with tabs[7]:
+    with tabs[2]:
         render_tab_bangke(st.session_state.bangke01, st.session_state.config)
-    with tabs[8]:
+    with tabs[3]:
         render_tab_tokhai(st.session_state.tokhai01, st.session_state.config)
 
 

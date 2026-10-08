@@ -4,7 +4,7 @@ Module đọc và parse dữ liệu từ các file Excel đầu vào.
 Mỗi file có cấu trúc header riêng, module này chuẩn hóa chúng.
 """
 import pandas as pd
-from utils import read_excel_file, read_excel_sheets, clean_string, safe_float, get_input_dir
+from utils import read_excel_file, read_excel_sheets, clean_string, safe_float, get_input_dir, resolve_file
 
 
 def load_ta035(config: dict) -> pd.DataFrame:
@@ -375,7 +375,7 @@ def load_bchdon(config: dict) -> pd.DataFrame:
     Header: row 7-8 (trong sheet BC)
     """
     fname = config["input_files"]["bchdon"]
-    filepath = get_input_dir(config) / fname
+    filepath = resolve_file(fname, config, file_key="bchdon")
     xls = pd.ExcelFile(filepath, engine="openpyxl")
 
     # Đọc sheet BC
@@ -442,7 +442,7 @@ def load_nhomtc(config: dict) -> pd.DataFrame:
     Header: row 7
     """
     fname = config["input_files"]["nhomtc"]
-    filepath = get_input_dir(config) / fname
+    filepath = resolve_file(fname, config, file_key="nhomtc")
     xls = pd.ExcelFile(filepath, engine="openpyxl")
 
     # Lấy sheet cuối cùng
