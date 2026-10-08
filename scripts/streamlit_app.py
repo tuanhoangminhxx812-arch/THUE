@@ -96,11 +96,18 @@ def highlight_diff(val):
 
 def highlight_ok(val):
     """Highlight ô OK."""
-    if isinstance(val, str) and "OK" in val:
+    if isinstance(val, str) and ("OK" in val or "KHỚP" in val):
         return "background-color: rgba(102, 187, 106, 0.1); color: #66bb6a"
     if isinstance(val, str) and "LỆCH" in val:
         return "background-color: rgba(239, 83, 80, 0.2); color: #ef5350"
     return ""
+
+
+def style_applymap(styler, func, subset=None):
+    """Hỗ trợ cả Pandas cũ (.applymap) và Pandas mới 2.1+ (.map)."""
+    if hasattr(styler, "map"):
+        return styler.map(func, subset=subset)
+    return styler.applymap(func, subset=subset)
 
 
 def df_to_display(df, max_rows=500):
@@ -489,7 +496,7 @@ def render_tab_tonghop(summary_data, taxvta=None):
             })
 
         df_k2 = pd.DataFrame(display_rows)
-        styled_k2 = df_k2.style.applymap(highlight_diff, subset=["Chênh Lệch (TA36 - Sổ Cái)"]).applymap(highlight_ok, subset=["Trạng Thái"])
+        styled_k2 = style_applymap(style_applymap(df_k2.style, highlight_diff, subset=["Chênh Lệch (TA36 - Sổ Cái)"]), highlight_ok, subset=["Trạng Thái"])
         st.dataframe(styled_k2, use_container_width=True, hide_index=True)
 
     st.divider()
@@ -526,7 +533,7 @@ def render_tab_tonghop(summary_data, taxvta=None):
             })
 
         df_b2 = pd.DataFrame(display_b2)
-        styled_b2 = df_b2.style.applymap(highlight_diff, subset=["Chênh Lệch (TA35 - Sổ Cái)"]).applymap(highlight_ok, subset=["Trạng Thái"])
+        styled_b2 = style_applymap(style_applymap(df_b2.style, highlight_diff, subset=["Chênh Lệch (TA35 - Sổ Cái)"]), highlight_ok, subset=["Trạng Thái"])
         st.dataframe(styled_b2, use_container_width=True, hide_index=True)
 
     st.divider()
@@ -563,7 +570,7 @@ def render_tab_tonghop(summary_data, taxvta=None):
             })
 
         df_k3 = pd.DataFrame(display_k3)
-        styled_k3 = df_k3.style.applymap(highlight_diff, subset=["Lệch (GCS - 4A)", "Lệch (4A - GL0903)"]).applymap(highlight_ok, subset=["Đánh Giá"])
+        styled_k3 = style_applymap(style_applymap(df_k3.style, highlight_diff, subset=["Lệch (GCS - 4A)", "Lệch (4A - GL0903)"]), highlight_ok, subset=["Đánh Giá"])
         st.dataframe(styled_k3, use_container_width=True, hide_index=True)
 
 
@@ -649,7 +656,7 @@ def render_tab_kiemdo(taxvta):
         for col in ["Giá trị A", "Giá trị B", "Chênh lệch"]:
             cc_display[col] = cc_display[col].apply(lambda x: fmt(x) if pd.notna(x) else "")
 
-        styled = cc_display.style.applymap(highlight_diff, subset=["Chênh lệch"]).applymap(highlight_ok, subset=["Trạng thái"])
+        styled = style_applymap(style_applymap(cc_display.style, highlight_diff, subset=["Chênh lệch"]), highlight_ok, subset=["Trạng thái"])
 
         st.dataframe(styled, use_container_width=True, hide_index=True)
 
