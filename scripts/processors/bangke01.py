@@ -87,6 +87,7 @@ def process_bangke01(all_results: dict, config: dict) -> dict:
             rows = []
 
             # Dòng 1: Gộp hoạt động kinh doanh điện
+            # Dòng 1: Gộp hoạt động kinh doanh điện
             dien_rows = banra_8[dien_mask]
             if not dien_rows.empty:
                 tong_dien = safe_float(dien_rows["DoanhSoChuaThue"].sum())
@@ -95,7 +96,7 @@ def process_bangke01(all_results: dict, config: dict) -> dict:
                     "Giá trị HHDV chưa có thuế GTGT": tong_dien,
                     "Thuế suất theo QĐ": 10,
                     "Thuế suất sau giảm": 8,
-                    "Thuế GTGT được giảm": int(tong_dien * 0.02),
+                    "Thuế GTGT được giảm": round(tong_dien * 0.02),
                 })
 
             # Các dòng còn lại: liệt kê chi tiết
@@ -108,14 +109,20 @@ def process_bangke01(all_results: dict, config: dict) -> dict:
                     "Giá trị HHDV chưa có thuế GTGT": ds,
                     "Thuế suất theo QĐ": 10,
                     "Thuế suất sau giảm": 8,
-                    "Thuế GTGT được giảm": int(ds * 0.02),
+                    "Thuế GTGT được giảm": round(ds * 0.02),
                 })
 
             banra_summary = pd.DataFrame(rows)
             banra_summary.insert(0, "STT", range(1, len(banra_summary) + 1))
 
             tong_br_chuathue = banra_summary["Giá trị HHDV chưa có thuế GTGT"].sum()
-            tong_br_thue_duocgiam = banra_summary["Thuế GTGT được giảm"].sum()
+            # Làm tròn số học theo tổng doanh thu (chuẩn HTKK & quy tắc tính thuế): 1.397.722.857.887 * 2% = 27.954.457.158
+            tong_br_thue_duocgiam = round(tong_br_chuathue * 0.02)
+            
+            # Cân đối sai số làm tròn số học (nếu có) vào dòng doanh thu chính để tổng bảng chi tiết khớp 100% dòng tổng cộng
+            diff_round = tong_br_thue_duocgiam - int(banra_summary["Thuế GTGT được giảm"].sum())
+            if diff_round != 0 and not banra_summary.empty:
+                banra_summary.loc[0, "Thuế GTGT được giảm"] += diff_round
 
     return {
         "muavao_detail": muavao_8,
