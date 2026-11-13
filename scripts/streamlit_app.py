@@ -1393,17 +1393,18 @@ def main():
     month_label = f"Tháng {selected_month[5:]}/{selected_month[:4]}"
     time_label = datetime.now().strftime('%H:%M:%S %d/%m/%Y')
 
-    # Header text + Nút Add Dữ Liệu Mới ở màn hình chính
-    col_h1, col_h2 = st.columns([4, 1.2])
-    with col_h1:
-        st.markdown(
-            f'<h2 style="margin:0 0 2px 0;color:#4fc3f7;font-size:1.35rem;font-weight:700;letter-spacing:1px;">⚡ ỨNG DỤNG KIỂM DÒ THUẾ GTGT PCVT</h2>'
-            f'<p style="margin:0 0 4px 0;color:#8899aa;font-size:0.8rem;">📅 Dữ liệu File Master: <strong>{month_label}</strong> &nbsp;|&nbsp; Xử lý lúc: {time_label}</p>',
-            unsafe_allow_html=True
-        )
-    with col_h2:
-        if st.button("➕ Add Dữ Liệu Mới", key="btn_main_add", use_container_width=True, type="primary"):
-            dialog_add_data(selected_month)
+    # Header text + Nút Add Dữ Liệu Mới ở màn hình chính (cố định khi cuộn)
+    with st.container(key="sticky_header"):
+        col_h1, col_h2 = st.columns([4, 1.2], vertical_alignment="center")
+        with col_h1:
+            st.markdown(
+                f'<h2 style="margin:0 0 2px 0;color:#4fc3f7;font-size:1.35rem;font-weight:700;letter-spacing:1px;line-height:1.2;">⚡ ỨNG DỤNG KIỂM DÒ THUẾ GTGT PCVT</h2>'
+                f'<p style="margin:0 0 2px 0;color:#8899aa;font-size:0.8rem;line-height:1.2;">📅 Dữ liệu File Master: <strong>{month_label}</strong> &nbsp;|&nbsp; Xử lý lúc: {time_label}</p>',
+                unsafe_allow_html=True
+            )
+        with col_h2:
+            if st.button("➕ Add Dữ Liệu Mới", key="btn_main_add", use_container_width=True, type="primary"):
+                dialog_add_data(selected_month)
 
     # === TABS: CHỈ GIỮ 4 SHEET CỐT LÕI THEO YÊU CẦU ===
     tabs = st.tabs([

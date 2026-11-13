@@ -6,10 +6,50 @@ DARK_THEME_CSS = """
 /* ===== Import font ===== */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-/* ===== Ẩn các nút mặc định của Streamlit ===== */
+/* ===== Ẩn các nút mặc định của Streamlit & tối ưu khoảng cách đỉnh ===== */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
+header[data-testid="stHeader"] {display: none !important;}
 header {visibility: hidden;}
+
+/* Giảm khoảng cách padding đỉnh trang để Header cố định nằm sát viền trên mượt mà */
+.block-container,
+[data-testid="stMainBlockContainer"] {
+    padding-top: 0.5rem !important;
+    padding-bottom: 2rem !important;
+}
+
+/* ===== CỐ ĐỊNH TIÊU ĐỀ & THANH TABS KHI CUỘN TRANG (STICKY HEADER & TABS) ===== */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-sticky_header),
+div:has(> .st-key-sticky_header),
+.st-key-sticky_header {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 1000 !important;
+    background: #0e1117 !important;
+    padding-top: 8px !important;
+    padding-bottom: 6px !important;
+    margin-bottom: 0px !important;
+}
+
+/* Thanh Tabs giữ cố định ngay dưới khối tiêu đề */
+.stTabs [data-baseweb="tab-list"] {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 56px !important;
+    z-index: 999 !important;
+    gap: 4px;
+    background: #1a2332 !important;
+    border-radius: 10px;
+    padding: 4px;
+    border: 1px solid #2a3f55;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.stTabs [data-baseweb="tab-panel"] {
+    padding-top: 8px !important;
+}
 
 /* ===== Toàn trang ===== */
 .stApp {
@@ -57,14 +97,6 @@ header {visibility: hidden;}
 }
 
 /* ===== Tabs ===== */
-.stTabs [data-baseweb="tab-list"] {
-    gap: 4px;
-    background: #1a2332;
-    border-radius: 10px;
-    padding: 4px;
-    border: 1px solid #2a3f55;
-}
-
 .stTabs [data-baseweb="tab"] {
     border-radius: 8px;
     padding: 8px 16px;
