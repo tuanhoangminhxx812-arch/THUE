@@ -348,6 +348,13 @@ def dialog_add_data(current_month: str = ""):
                 with open(file_path, "wb") as f:
                     f.write(uf.getbuffer())
 
+            # Xóa cache dữ liệu cũ để đảm bảo cả 4 sheet đều tính toán lại 100%
+            st.session_state.results = None
+            st.session_state.taxvta = None
+            st.session_state.bangke01 = None
+            st.session_state.tokhai01 = None
+            st.session_state.processed_month = None
+
             st.session_state.target_selected_month = month_clean
             if auto_run:
                 st.session_state.trigger_process = True
@@ -1315,6 +1322,36 @@ def _export_tokhai01_excel(tokhai01, config):
 
 
 # ============================================================
+# ĐỒNG BỘ VÀ TÍNH TOÁN DỮ LIỆU CẢ 4 SHEET
+# ============================================================
+def load_and_process_month_data(month: str, force_update_master: bool = False):
+    """
+    Đồng bộ và tính toán lại toàn bộ dữ liệu cho cả 4 sheet/tab:
+    - Tab 1: Tổng Hợp (Master TAX_VTA & DASHBOARD_KIEMDO)
+    - Tab 2: Kiểm Dò (taxvta: Cross-checks & Kiểm dò chữ T)
+    - Tab 3: Bảng Kê 01 (bangke01: Giảm thuế NQ142)
+    - Tab 4: Tờ Khai 01 (tokhai01: Tờ khai thuế Mẫu 01/GTGT)
+    """
+    config = load_config()
+    config["report_month"] = month
+    resolve_config_filenames(config)
+    st.session_state.config = config
+
+    if force_update_master:
+        update_tax_vta_file(month)
+    else:
+        ensure_tax_vta_file(month)
+
+    results, taxvta = run_all_processors(config)
+    st.session_state.results = results
+    st.session_state.taxvta = taxvta
+    st.session_state.bangke01 = process_bangke01(results, config)
+    st.session_state.tokhai01 = process_tokhai01(results, taxvta, config)
+    st.session_state.processed_month = month
+    return results, taxvta
+
+
+# ============================================================
 # MAIN APP
 # ============================================================
 def main():
@@ -1325,39 +1362,31 @@ def main():
         btn_process = True
         st.session_state.trigger_process = False
 
-    # === XỬ LÝ KHI NHẤN "CẬP NHẬT DỮ LIỆU" ===
+    # === XỬ LÝ KHI NHẤN "CẬP NHẬT DỮ LIỆU" HOẶC TỰ ĐỘNG CHẠY SAU KHI ADD DỮ LIỆU MỚI ===
     if btn_process:
         try:
-            with st.spinner(f"Đang chép dữ liệu từ các file nguồn vào file Master TAX_VTA tháng {selected_month}..."):
-                updated_file = update_tax_vta_file(selected_month)
-                st.session_state.processed_month = selected_month
-                st.toast(f"✅ Đã nạp và lưu đè file gốc {os.path.basename(updated_file)} thành công!", icon="✅")
-                st.rerun()
+            with st.spinner(f"Đang đồng bộ và tính toán lại toàn bộ 4 sheet dữ liệu tháng {selected_month}..."):
+                load_and_process_month_data(selected_month, force_update_master=True)
+                st.toast(f"✅ Đã cập nhật thành công toàn bộ 4 sheet dữ liệu tháng {selected_month}!", icon="✅")
         except Exception as e:
             st.error(f"❌ Lỗi cập nhật dữ liệu: {str(e)}")
             with st.expander("Chi tiết lỗi"):
                 st.code(traceback.format_exc())
 
-    # === ĐỌC DỮ LIỆU MASTER VÀ CHI TIẾT CÁC TAB ===
-    summary_data = get_tax_vta_summary_data(selected_month)
-
+    # === NẠP LẦN ĐẦU HOẶC KHI ĐỔI THÁNG TRÊN SIDEBAR ===
     if st.session_state.results is None or st.session_state.processed_month != selected_month:
         try:
-            config = load_config()
-            config["report_month"] = selected_month
-            resolve_config_filenames(config)
-            st.session_state.config = config
-
-            results, taxvta = run_all_processors(config)
-            st.session_state.results = results
-            st.session_state.taxvta = taxvta
-            st.session_state.bangke01 = process_bangke01(results, config)
-            st.session_state.tokhai01 = process_tokhai01(results, taxvta, config)
-            st.session_state.processed_month = selected_month
-        except Exception:
+            with st.spinner(f"Đang nạp dữ liệu tháng {selected_month}..."):
+                load_and_process_month_data(selected_month, force_update_master=False)
+        except Exception as e:
+            st.error(f"❌ Không thể nạp dữ liệu tháng {selected_month}: {str(e)}")
+            with st.expander("Chi tiết lỗi"):
+                st.code(traceback.format_exc())
             st.session_state.results = {}
             st.session_state.taxvta = {}
 
+    # === ĐỌC DỮ LIỆU MASTER VÀ CHI TIẾT CÁC TAB ===
+    summary_data = get_tax_vta_summary_data(selected_month)
     results = st.session_state.results or {}
     taxvta = st.session_state.taxvta or {}
 
