@@ -17,7 +17,8 @@ import pandas as pd
 
 from utils import (
     load_config, resolve_config_filenames, get_report_month_label,
-    get_output_dir, format_number, safe_float, scan_available_months
+    get_output_dir, format_number, safe_float, scan_available_months,
+    get_input_base_dir
 )
 from processors.ta035 import process_ta035
 from processors.ta030 import process_ta030_3331, process_ta030_1331
@@ -299,6 +300,65 @@ def build_t_account_html(kiem_do):
 
 
 # ============================================================
+# DIALOG: THÊM DỮ LIỆU MỚI
+# ============================================================
+@st.dialog("➕ Thêm Dữ Liệu Mới (Add Data)")
+def dialog_add_data(current_month: str = ""):
+    st.markdown("Nhập kỳ báo cáo và chọn các file Excel ERP cần đưa vào:")
+
+    default_m = current_month if current_month else datetime.now().strftime("%Y-%m")
+    upload_month = st.text_input("Kỳ báo cáo (định dạng YYYY-MM):", value=default_m, key="dlg_upload_month")
+
+    st.caption("Kéo & thả các file Excel ERP (.xlsx, .xls) của tháng:")
+    uploaded_files = st.file_uploader(
+        "Chọn các file Excel đầu vào:",
+        type=["xlsx", "xls", "csv"],
+        accept_multiple_files=True,
+        key="dlg_files_uploader"
+    )
+
+    with st.expander("ℹ️ Danh sách file hệ thống tự động nhận diện"):
+        st.markdown("""
+        - **Bán ra:** `TA_035` / `TA35`, `BC_HDon_01` / `GCS`, `BC_San luong` / `Nhom_TC`
+        - **Mua vào:** `TA_036` / `TA36`
+        - **Sổ chi tiết / Sổ cái:** `TA_030_TK3331` / `333111`, `TA_030_TK1331` / `13311`, `GL_038` / `33895`, `GL_0903` / `0903`, `rptKDDN4A` / `4A`
+        - *(Tùy chọn)* File Master kiểm dò tháng trước: `TAX_VTA_YYYY_MM.xlsx`
+        """)
+
+    if uploaded_files:
+        st.success(f"📁 Đã chọn **{len(uploaded_files)}** file sẵn sàng tải lên.")
+
+    auto_run = st.checkbox("⚡ Tự động chạy chương trình đối chiếu ngay sau khi nạp", value=True)
+
+    col_act1, col_act2 = st.columns([1, 1])
+    with col_act1:
+        if st.button("🚀 Nạp Dữ Liệu & Chạy Ngay", type="primary", use_container_width=True, key="dlg_btn_save_run"):
+            if not uploaded_files:
+                st.error("Vui lòng chọn ít nhất 1 file Excel.")
+                return
+            month_clean = upload_month.strip()
+            if not month_clean or "-" not in month_clean:
+                st.error("Vui lòng nhập định dạng tháng hợp lệ (YYYY-MM, ví dụ 2026-10).")
+                return
+
+            target_dir = get_input_base_dir() / month_clean
+            target_dir.mkdir(parents=True, exist_ok=True)
+            for uf in uploaded_files:
+                file_path = target_dir / uf.name
+                with open(file_path, "wb") as f:
+                    f.write(uf.getbuffer())
+
+            st.session_state.target_selected_month = month_clean
+            if auto_run:
+                st.session_state.trigger_process = True
+            st.rerun()
+
+    with col_act2:
+        if st.button("Đóng", use_container_width=True, key="dlg_btn_close"):
+            st.rerun()
+
+
+# ============================================================
 # SIDEBAR
 # ============================================================
 def render_sidebar():
@@ -307,6 +367,12 @@ def render_sidebar():
         st.markdown('<div class="logo-container"><div class="logo-icon">⚡</div></div>', unsafe_allow_html=True)
         st.markdown("# THUẾ GTGT")
         st.caption("Công ty Điện lực Vũng Tàu")
+
+        st.divider()
+
+        # Nút Add Dữ Liệu Mới nổi bật
+        if st.button("➕ Thêm Dữ Liệu Mới", type="primary", use_container_width=True, help="Thêm các file Excel ERP mới và chạy chương trình"):
+            dialog_add_data()
 
         st.divider()
 
@@ -319,10 +385,19 @@ def render_sidebar():
         if ky_thue == "Tháng":
             if months:
                 month_options = {m["label"]: m["month"] for m in months}
+                month_keys = list(month_options.keys())
+                month_vals = list(month_options.values())
+
+                default_idx = 0
+                target_m = st.session_state.get("target_selected_month")
+                if target_m and target_m in month_vals:
+                    default_idx = month_vals.index(target_m)
+                    del st.session_state.target_selected_month
+
                 selected_label = st.selectbox(
                     "Chọn tháng",
-                    options=list(month_options.keys()),
-                    index=0
+                    options=month_keys,
+                    index=default_idx
                 )
                 selected_month = month_options[selected_label]
                 file_count = next((m["file_count"] for m in months if m["month"] == selected_month), 0)
@@ -346,7 +421,7 @@ def render_sidebar():
         # Nút chạy & cập nhật + xuất Excel trực tiếp 1-click
         col1, col2 = st.columns(2)
         with col1:
-            btn_process = st.button("🔄 Cập Nhật Dữ Liệu", type="primary", use_container_width=True)
+            btn_process = st.button("🔄 Cập Nhật Dữ Liệu", type="secondary", use_container_width=True)
         with col2:
             master_file = get_month_tax_vta_file(selected_month)
             if master_file.exists():
@@ -1245,6 +1320,11 @@ def _export_tokhai01_excel(tokhai01, config):
 def main():
     selected_month, btn_process = render_sidebar()
 
+    # Tự động kích hoạt khi vừa upload xong từ Dialog
+    if st.session_state.get("trigger_process"):
+        btn_process = True
+        st.session_state.trigger_process = False
+
     # === XỬ LÝ KHI NHẤN "CẬP NHẬT DỮ LIỆU" ===
     if btn_process:
         try:
@@ -1284,12 +1364,17 @@ def main():
     month_label = f"Tháng {selected_month[5:]}/{selected_month[:4]}"
     time_label = datetime.now().strftime('%H:%M:%S %d/%m/%Y')
 
-    # Header text
-    st.markdown(
-        f'<h2 style="text-align:center;color:#4fc3f7;margin:0 0 2px 0;font-size:1.4rem;font-weight:700;letter-spacing:1px;">⚡ ỨNG DỤNG KIỂM DÒ THUẾ GTGT PCVT</h2>'
-        f'<p style="text-align:center;color:#8899aa;font-size:0.8rem;margin:0 0 4px 0;">📅 Dữ liệu File Master: <strong>{month_label}</strong> &nbsp;|&nbsp; Xử lý lúc: {time_label}</p>',
-        unsafe_allow_html=True
-    )
+    # Header text + Nút Add Dữ Liệu Mới ở màn hình chính
+    col_h1, col_h2 = st.columns([4, 1.2])
+    with col_h1:
+        st.markdown(
+            f'<h2 style="margin:0 0 2px 0;color:#4fc3f7;font-size:1.35rem;font-weight:700;letter-spacing:1px;">⚡ ỨNG DỤNG KIỂM DÒ THUẾ GTGT PCVT</h2>'
+            f'<p style="margin:0 0 4px 0;color:#8899aa;font-size:0.8rem;">📅 Dữ liệu File Master: <strong>{month_label}</strong> &nbsp;|&nbsp; Xử lý lúc: {time_label}</p>',
+            unsafe_allow_html=True
+        )
+    with col_h2:
+        if st.button("➕ Add Dữ Liệu Mới", key="btn_main_add", use_container_width=True, type="primary"):
+            dialog_add_data(selected_month)
 
     # === TABS: CHỈ GIỮ 4 SHEET CỐT LÕI THEO YÊU CẦU ===
     tabs = st.tabs([
